@@ -19,3 +19,12 @@
 .map-load-message{position:absolute;bottom:10px;inset-inline-start:12px;z-index:401;background:#fffdf5;color:#84501a;border:1px solid #ebcd9c;padding:7px 10px;border-radius:8px;max-width:85%;font-size:11px}
 .access-message{margin:min(25vh,150px) auto;background:white;max-width:500px;padding:40px;border-radius:18px;text-align:center;box-shadow:0 10px 50px #10284329}
 @media(max-width:650px){.layout{width:100%;overflow:hidden}.topbar{width:100%;padding:0 10px}.heading-top h1{font-size:clamp(13px,4vw,19px)}.metric{min-width:0}.card,.metric,.table-wrap{min-width:0}.map-box.tall{height:360px}.insight-box{line-height:1.7}.map-split,.inspector-layout{display:grid;grid-template-columns:minmax(0,1fr)!important}.topbar .region-select{max-width:110px}.operator{display:none}}
+
+/* Scoped sign-in styling; operations pages keep their existing layout. */
+.login-wrap{min-height:100svh;background:radial-gradient(ellipse at top right,#234e78,transparent 65%),#091d35;padding:24px 16px}
+.login-card{padding:clamp(24px,6vw,40px);border:1px solid #dbe5ef;gap:18px}
+.login-card h2{margin:4px 0;font-size:20px;color:#102f50;text-align:center}
+.login-card .form-label{font-size:14px;gap:9px}.login-card input{height:48px;font-size:16px}
+.login-card .btn{min-height:48px;background:#112f50;border-color:#112f50;font-size:15px}
+.login-card .btn:disabled{opacity:.65;cursor:wait}.login-card .validation-error{min-height:20px;font-size:13px}
+.login-note{text-align:center;color:#718399}.login-card :focus-visible{outline:3px solid #5da9e9;outline-offset:3px}

@@ -10,7 +10,7 @@ import {fileURLToPath} from 'node:url';
 const root=path.dirname(fileURLToPath(import.meta.url));
 const publicDir=path.join(root,'public'),dataDir=path.join(root,'data'),store=path.join(dataDir,'state.json');
 const PORT=Number(process.env.PORT||3000),DEVICE_KEY=process.env.DEVICE_KEY||'',ADMIN_KEY=process.env.ADMIN_KEY||'';
-const AUTO_LOCAL=process.env.APLATE_SKIP_LOGIN==='1';
+const AUTO_LOCAL=process.env.APLATE_SKIP_LOGIN==='1' && process.env.NODE_ENV!=='production' && !process.env.RENDER;
 const SESSION_AGE=8*60*60*1000;const sessions=new Map();
 if(!DEVICE_KEY||!ADMIN_KEY||DEVICE_KEY===ADMIN_KEY){console.error('Set DEVICE_KEY and ADMIN_KEY environment variables before starting.');process.exit(1)}
 const allowedMime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon'};
@@ -68,16 +68,16 @@ function err(res,code,message){respond(res,code,{error:message})}
 function text(s,max=160){return typeof s==='string'?s.trim().slice(0,max):''}
 const bounded=(n,lo,hi)=>typeof n==='number'&&Number.isFinite(n)&&n>=lo&&n<=hi;
 function sessionFrom(req){const cookie=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('ap_session='));if(!cookie)return false;const token=cookie.slice(11);const expires=sessions.get(token);if(!expires||expires<Date.now()){sessions.delete(token);return false}return true}
-function localClient(req){return ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)}
+function localClient(req){if(req.headers['x-forwarded-for']||req.headers['forwarded'])return false;return ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)}
 function admin(req){return (AUTO_LOCAL&&localClient(req))||sessionFrom(req)||same(req.headers['x-admin-key'],ADMIN_KEY)}function device(req){return same(req.headers['x-device-key'],DEVICE_KEY)}
 async function body(req){let s='';for await(const c of req){s+=c;if(s.length>16000)throw new Error('الطلب كبير جدًا')}try{return JSON.parse(s)}catch{throw new Error('تنسيق JSON غير صالح')}}
 function statusAllowed(x){return ['open','assigned','resolved'].includes(x)}
 async function route(req,res){let u;try{u=new URL(req.url,'http://localhost')}catch{return err(res,400,'رابط غير صالح')}
 if(u.pathname==='/api/login'&&req.method==='POST'){
  let d;try{d=await body(req)}catch{return err(res,400,'تنسيق غير صالح')}
- if(!same(text(d.password,256),ADMIN_KEY))return err(res,401,'رمز الدخول غير صحيح');
+ if(!d||typeof d!=='object'||Array.isArray(d)||typeof d.password!=='string'||!same(d.password,ADMIN_KEY))return err(res,401,'رمز الدخول غير صحيح');
  const token=crypto.randomBytes(32).toString('hex');sessions.set(token,Date.now()+SESSION_AGE);
- res.setHeader('Set-Cookie',`ap_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_AGE/1000}${req.socket.encrypted?'; Secure':''}`);
+ res.setHeader('Set-Cookie',`ap_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_AGE/1000}${(req.socket.encrypted||process.env.RENDER||process.env.NODE_ENV==='production')?'; Secure':''}`);
  return respond(res,200,{ok:true,name:text(d.name,80)||'مشغل النظام'});
 }
 if(u.pathname==='/api/logout'&&req.method==='POST'){const cookie=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('ap_session='));if(cookie)sessions.delete(cookie.slice(11));res.setHeader('Set-Cookie','ap_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');return respond(res,200,{ok:true})}

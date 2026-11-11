@@ -9,7 +9,7 @@ import {fileURLToPath} from 'node:url';
 const src=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 test('health, registration, device ingest, tamper deduplication, permissions',async()=>{
   const dir=await mkdtemp(path.join(tmpdir(),'aplate-test-'));await cp(path.join(src,'server.mjs'),path.join(dir,'server.mjs'));await cp(path.join(src,'public'),path.join(dir,'public'),{recursive:true});
-  const port=31000+Math.floor(Math.random()*5000);const child=spawn(process.execPath,['server.mjs'],{cwd:dir,env:{...process.env,PORT:String(port),DEVICE_KEY:'test-device-token',ADMIN_KEY:'test-admin-token',APLATE_SEED:'0'},stdio:'ignore'});
+  const port=31000+Math.floor(Math.random()*5000);const child=spawn(process.execPath,['server.mjs'],{cwd:dir,env:{...process.env,PORT:String(port),DEVICE_KEY:'test-device-token',ADMIN_KEY:'test-admin-token',APLATE_SEED:'0',APLATE_SKIP_LOGIN:'0'},stdio:'ignore'});
   const url=`http://127.0.0.1:${port}`;try{
     let ready=false;for(let n=0;n<65;n++){try{let r=await fetch(url+'/api/health');if(r.ok){ready=true;break}}catch{}await new Promise(r=>setTimeout(r,50))}assert.ok(ready,'server ready');
     const post=(route,data,keyName='x-admin-key',key='test-admin-token')=>fetch(url+route,{method:'POST',headers:{'content-type':'application/json',[keyName]:key},body:JSON.stringify(data)});
@@ -28,11 +28,18 @@ test('health, registration, device ingest, tamper deduplication, permissions',as
     r=await fetch(url+'/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:'tester',password:'wrong'})});assert.equal(r.status,401);
     r=await fetch(url+'/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:'tester',password:'test-admin-token'})});assert.equal(r.status,200);
     const cookie=r.headers.get('set-cookie').split(';')[0];
+    assert.match(r.headers.get('set-cookie'),/HttpOnly; SameSite=Strict/);
+    r=await fetch(url+'/api/session',{headers:{cookie}});assert.equal((await r.json()).authenticated,true);
     r=await fetch(url+'/api/state',{headers:{cookie}});assert.equal(r.status,200);
     const stream=await fetch(url+'/api/events',{headers:{cookie}});assert.equal(stream.status,200);
     const reader=stream.body.getReader();let first=await reader.read();assert.match(new TextDecoder().decode(first.value),/connected/);
     r=await post('/api/alerts',{vehicleId:'V1',type:'other',severity:'high',message:'trigger event'});assert.equal(r.status,200);
     const second=await Promise.race([reader.read(),new Promise((_,reject)=>setTimeout(()=>reject(new Error('No SSE event')),1500))]);assert.match(new TextDecoder().decode(second.value),/event: state/);await reader.cancel();
+    r=await fetch(url+'/api/logout',{method:'POST',headers:{cookie}});assert.equal(r.status,200);
+    assert.match(r.headers.get('set-cookie'),/Max-Age=0/);
+    r=await fetch(url+'/api/session',{headers:{cookie}});assert.equal((await r.json()).authenticated,false);
+    for(const route of ['/api/state','/api/events']){r=await fetch(url+route,{headers:{cookie}});assert.equal(r.status,401)}
+    r=await fetch(url+'/api/vehicles',{method:'POST',headers:{cookie,'content-type':'application/json'},body:JSON.stringify({id:'blocked'})});assert.equal(r.status,401);
     r=await fetch(url+'/../server.mjs');assert.notEqual(r.status,200);
   }finally{
     if(child.exitCode===null&&child.signalCode===null){
